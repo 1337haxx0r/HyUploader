@@ -1,24 +1,26 @@
 import os
-import sys
+from dotenv import load_dotenv
 import requests
 from tqdm import tqdm
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2 import service_account
 
+
+load_dotenv()
+
 # ------------------------ Configuration ------------------------
 
 # HyperDeck Configuration
-HYPERDECK_IP = '192.168.72.65'  # Replace with your HyperDeck's IP address
-SD_CARD_NAME = 'Media-sd1'       # Replace with the SD card you want to access (e.g., 'Media-sd1')
+HYPERDECK_IP = os.getenv('HYPERDECK_IP')  # Replace with your HyperDeck's IP address
+SD_CARD_NAME = os.getenv('SD_CARD_NAME')       # Replace with the SD card you want to access (e.g., 'Media-sd1')
 
 # Local Download Directory
-DOWNLOAD_DIR = '/ssd'  # Replace with your local directory path
-
+DOWNLOAD_DIR = os.getenv('DOWNLOAD_DIR')  # Replace with your local directory path
 # Google Drive Configuration
-SERVICE_ACCOUNT_FILE = 'key/nxt-ig-a2ad1073be4b.json'  # Path to your service account key file
+SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE')  # Path to your service account key file
 SCOPES = ['https://www.googleapis.com/auth/drive']
-PARENT_FOLDER_ID = '0APTAHTay5f8uUk9PVA'  # Replace with the ID of the parent folder on Google Drive
+PARENT_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")  # Replace with the ID of the parent folder on Google Drive
 
 # ------------------------ End of Configuration ------------------------
 
