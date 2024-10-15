@@ -1,4 +1,5 @@
 import os
+import sys
 from dotenv import load_dotenv
 import requests
 from tqdm import tqdm
@@ -6,21 +7,20 @@ from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2 import service_account
 
-
 load_dotenv()
 
 # ------------------------ Configuration ------------------------
 
 # HyperDeck Configuration
-HYPERDECK_IP = os.getenv('HYPERDECK_IP')  # Replace with your HyperDeck's IP address
-SD_CARD_NAME = os.getenv('SD_CARD_NAME')       # Replace with the SD card you want to access (e.g., 'Media-sd1')
+HYPERDECK_IP = os.getenv('HYPERDECK_IP')  # HyperDeck's IP address
 
 # Local Download Directory
-DOWNLOAD_DIR = os.getenv('DOWNLOAD_DIR')  # Replace with your local directory path
+DOWNLOAD_DIR = os.getenv('DOWNLOAD_DIR')  # Local directory path
+
 # Google Drive Configuration
 SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE')  # Path to your service account key file
 SCOPES = ['https://www.googleapis.com/auth/drive']
-PARENT_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")  # Replace with the ID of the parent folder on Google Drive
+PARENT_FOLDER_ID = os.getenv("DRIVE_FOLDER_ID")  # ID of the parent folder on Google Drive
 
 # ------------------------ End of Configuration ------------------------
 
@@ -37,17 +37,6 @@ def get_mounted_media():
     except requests.exceptions.RequestException as e:
         print(f"Error retrieving mounted media: {e}")
         return []
-
-def find_sd_card(sd_card_name):
-    """
-    Finds the specified SD card in the list of mounted media.
-    """
-    mounts = get_mounted_media()
-    for mount in mounts:
-        if mount['name'] == sd_card_name:
-            return mount['name']
-    print(f"SD card '{sd_card_name}' not found.")
-    return None
 
 def list_files_on_sd_card(sd_card_name):
     """
@@ -171,8 +160,6 @@ def authenticate_google_drive():
     drive_service = build('drive', 'v3', credentials=credentials)
     return drive_service
 
-
-
 def navigate_and_select_folder(parent_folder_id, drive_service):
     """
     Navigates through folders and allows the user to select or create a folder.
@@ -220,6 +207,61 @@ def navigate_and_select_folder(parent_folder_id, drive_service):
         else:
             print("Invalid choice. Please try again.")
 
+def select_sd_card():
+    """
+    Allows the user to select an SD card from the list of mounted media.
+    """
+    mounts = get_mounted_media()
+    if not mounts:
+        print("No mounted media found.")
+        return None
+
+    print("\nAvailable SD Cards:")
+    for idx, mount in enumerate(mounts, start=1):
+        print(f"[{idx}] {mount['name']}")
+
+    while True:
+        try:
+            choice = int(input("Select an SD card: "))
+            if 1 <= choice <= len(mounts):
+                selected_sd_card = mounts[choice - 1]['name']
+                print(f"Selected SD card: {selected_sd_card}")
+                return selected_sd_card
+            else:
+                print("Invalid choice. Please select a valid SD card.")
+        except ValueError:
+            print("Invalid input. Please enter a number.")
+
+def select_files_to_download(files):
+    """
+    Allows the user to select individual files to download or all of them.
+    """
+    print("\nFiles on the SD card:")
+    for idx, file_info in enumerate(files, start=1):
+        print(f"[{idx}] {file_info['name']}")
+
+    option_download_all = len(files) + 1
+    print(f"[{option_download_all}] Download all files")
+
+    selected_files = []
+    while True:
+        choice = input("Enter the number(s) of the file(s) to download (e.g., 1,3,5) or 'all' to download all: ")
+        if choice.lower() == 'all' or choice == str(option_download_all):
+            selected_files = files
+            break
+        else:
+            try:
+                indices = [int(i.strip()) for i in choice.split(',')]
+                selected_files = [files[i - 1] for i in indices if 1 <= i <= len(files)]
+                if selected_files:
+                    break
+                else:
+                    print("No valid file numbers entered. Please try again.")
+            except (ValueError, IndexError):
+                print("Invalid input. Please enter valid file numbers separated by commas or 'all'.")
+
+    return selected_files
+
 def automate_process():
     """
     Automates the process of downloading files from the HyperDeck and uploading them to Google Drive.
@@ -230,22 +272,33 @@ def automate_process():
     # Authenticate with Google Drive
     drive_service = authenticate_google_drive()
 
+
+
+    # Select an SD card
+    sd_card = select_sd_card()
+    if not sd_card:
+        return
+
+    # List files on the SD card
+    files = list_files_on_sd_card(sd_card)
+    if not files:
+        print("No files found on the SD card.")
+        return
+
+    # Select files to download
+    selected_files = select_files_to_download(files)
+    if not selected_files:
+        print("No files selected for download.")
+        return
+
     # Navigate and select the folder to upload into
     target_folder_id = navigate_and_select_folder(PARENT_FOLDER_ID, drive_service)
     if not target_folder_id:
         print("No folder selected. Exiting.")
         return
 
-    # Find the specified SD card
-    sd_card = find_sd_card(SD_CARD_NAME)
-    if not sd_card:
-        return
-
-    # List files on the SD card
-    files = list_files_on_sd_card(sd_card)
-
-    # Download and upload each file
-    for file_info in files:
+    # Download and upload each selected file
+    for file_info in selected_files:
         if file_info['type'] == 'file':
             local_file = download_file_from_sd_card(sd_card, file_info)
             if local_file:
